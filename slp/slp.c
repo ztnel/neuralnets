@@ -1,10 +1,15 @@
 
 #include "slp.h"
+#include <stdio.h>
 #include <stdlib.h>
 
-static void randomize_sequence(uint8_t *arr, uint8_t size) {
-  for (uint8_t i = 0; i < size; ++i) {
-    arr[i] = rand() % (size + 1);
+// fisher-yates shuffle algorithm (O(n))
+static void fisher_yates_shuffle(uint16_t *arr, const uint16_t size) {
+  for (int i = size - 1; i >= 0; --i) {
+    uint16_t j = rand() % (size - 1);
+    uint16_t tmp = arr[i];
+    arr[i] = arr[j];
+    arr[j] = tmp;
   }
 }
 
@@ -45,22 +50,38 @@ void slp_train(struct slp_ctx *ctx, const struct slp_training_params *params) {
   if (params == NULL) {
     return;
   }
-
+  if (params->sample_indices == NULL) {
+    return;
+  }
+  FILE *fp;
+  fp = fopen("train.csv", "w");
   // implement stochastic learning algorithm -> update weights after each training sample
   float error = 0.0f;
-  for (uint32_t epochs = 0; epochs < params->epochs; ++epochs) {
+  fprintf(fp, "EPOCH, WEIGHT_1, WEIGHT_2, BIAS, ERROR\n");
+  for (uint32_t epoch = 0; epoch < params->epochs; ++epoch) {
     // for every epoch shuffle training data: select a random sequence of indices from 0 -> num_samples
-    uint8_t batch_sequence[10] = {0};
-    randomize_sequence(batch_sequence, params->num_samples);
+    fisher_yates_shuffle(params->sample_indices, params->num_samples);
     for (uint8_t i = 0; i < params->num_samples; ++i) {
-      slp_run(ctx, params->inputs[batch_sequence[i]]);
+      const uint16_t index = params->sample_indices[i];
+      const float *inputs = params->samples[index].inputs;
+      const float supervised_output = params->samples[params->sample_indices[i]].output;
+      slp_run(ctx, inputs);
       // calculate error
-      error = ctx->output - params->outputs[batch_sequence[i]];
+      error = supervised_output - ctx->output;
       // run backpropagation
-      for (uint16_t i = 0; i < ctx->num_inputs; ++i) {
-        ctx->weights[i] = ctx->weights[i] + params->learning_rate * error * params->inputs[batch_sequence[i]][i];
+      for (uint16_t j = 0; j < ctx->num_inputs; ++j) {
+        ctx->weights[j] = ctx->weights[j] + (params->learning_rate * error * inputs[j]);
       }
-      ctx->bias = ctx->bias + params->learning_rate * error;
+      ctx->bias = ctx->bias + (params->learning_rate * error);
     }
+    fprintf(fp, "%u,", epoch);
+    printf("%u,", epoch);
+    for (uint16_t j = 0; j < ctx->num_inputs; ++j) {
+      fprintf(fp, "%.1f,", ctx->weights[j]);
+      printf("%.1f,", ctx->weights[j]);
+    }
+    fprintf(fp, "%.1f,%.1f\n", ctx->bias, error);
+    printf("%.1f,%.1f\n", ctx->bias, error);
   }
+  fclose(fp);
 }

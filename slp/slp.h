@@ -10,12 +10,17 @@
 
 #define SLP_MAX_WEIGHTS (uint16_t)10
 
+struct slp_sample {
+  const float *inputs;
+  const float output;
+};
+
 struct slp_training_params {
   uint32_t epochs;
   float learning_rate;
   const uint16_t num_samples;
-  const float *inputs[4];
-  const float *outputs;
+  uint16_t *sample_indices;
+  const struct slp_sample *samples;
 };
 
 struct slp_ctx {
